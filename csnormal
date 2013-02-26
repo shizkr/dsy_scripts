@@ -1,0 +1,34 @@
+#!/bin/bash
+# This script is to generate cscope.* files for source browsing.
+# It can be executed in either of REPO top directory or kernel
+# diectory.
+
+CSCOPEDIR=~/cscope
+CSCOPEFILE="$CSCOPEDIR/cscope.files"
+
+mkdir -p $CSCOPEDIR
+
+if [ -f $CSCOPEFILE ]; then
+	mv $CSCOPEFILE $CSCOPEFILE.old
+fi
+
+DIR=`pwd`
+
+echo $DIR
+###############################################################################
+find $PWD                                           \
+    -name "*.[chxsS]" -print | tee -a "$CSCOPEFILE"
+find $PWD                                           \
+    -name "**.mk" -print | tee -a "$CSCOPEFILE"
+
+ls -al $CSCOPEFILE
+
+echo "Next step"
+echo "Run cscope -b -q -k"
+echo "Copy cscope.out to target directory"
+cd $CSCOPEDIR
+cscope -b -q -k
+cp $CSCOPEDIR/cscope.in.out $DIR
+cp $CSCOPEDIR/cscope.out $DIR
+cp $CSCOPEDIR/cscope.po.out $DIR
+echo "Copied cscope files to $DIR"

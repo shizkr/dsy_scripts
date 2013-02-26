@@ -1,0 +1,86 @@
+#!/bin/bash
+# This script is to generate cscope.* files for source browsing.
+# It can be executed in either of REPO top directory or kernel
+# diectory.
+
+CSCOPEDIR=~/cscope
+CSCOPEFILE="$CSCOPEDIR/cscope.files"
+
+KNL_SUB="kernel"
+KERNEL=""
+
+if [ "$1" != "" ]; then
+	PROJECT=$1
+	echo "Input path: $PROJECT"
+	if [ ! -d $1 ]; then
+		echo "ERROR: Input path doesn't exist! $1"
+		exit
+	fi
+
+	if [ -d $PROJECT/$KNL_SUB/arch ] && [ -d $PROJECT/$KNL_SUB/kernel ]; then
+		REPO="1"
+		KERNEL=$PROJECT/$KNL_SUB # TOP repo directory
+	fi
+
+	if [ -d $PROJECT/arch ] && [ -d $PROJECT/kernel ]; then
+		KERNEL=$PROJECT # Kernel directory
+	fi
+
+	if [ "$KERNEL" == "" ]; then
+		echo "$1 is not valid directory. Please verify your REPO"
+	fi
+else
+	echo "Error!"
+	echo "Usage: csfindrepo <absolute dir> "
+	exit
+fi
+
+echo "PROJECT: $PROJECT"
+echo "KERNEL: $KERNEL"
+
+mkdir -p $CSCOPEDIR
+
+if [ -f $CSCOPEFILE ]; then
+	mv $CSCOPEFILE $CSCOPEFILE.old
+fi
+
+###############################################################################
+# Kernel source files
+###############################################################################
+find  $KERNEL                                                                \
+	-path "$KERNEL/arch/*" ! -path "$KERNEL/arch/arm*" -prune -o                \
+	-path "$KERNEL/Documentation*" -prune -o                                 \
+	-path "$KERNEL/scripts*" -prune -o                                       \
+	-path "$KERNEL/drivers/*" ! -path "$KERNEL/drivers/mmc*" -prune -o          \
+    -name "*.[chxsS]" -print | tee "$CSCOPEFILE"
+# Drivers
+find  $KERNEL/drivers/power/                                                 \
+    -name "*.[chxsS]" -print | tee -a "$CSCOPEFILE"
+find  $KERNEL/drivers/usb/                                                   \
+    -name "*.[chxsS]" -print | tee -a "$CSCOPEFILE"
+find  $KERNEL/drivers/tty/                                                   \
+    -name "*.[chxsS]" -print | tee -a "$CSCOPEFILE"
+find  $KERNEL/drivers/staging/                                               \
+    -name "*.[chxsS]" -print | tee -a "$CSCOPEFILE"
+find  $KERNEL/drivers/sfi/                                               \
+    -name "*.[chxsS]" -print | tee -a "$CSCOPEFILE"
+
+###############################################################################
+# Userspace source files
+###############################################################################
+if [ "$REPO" == "1" ]; then
+find  $PROJECT/bootable/droidboot                                            \
+    -name "*.[chxsS]" -print | tee -a "$CSCOPEFILE"
+fi
+
+ls -al $CSCOPEFILE
+
+echo "Next step"
+echo "Run cscope -b -q -k"
+echo "Copy cscope.out to target directory"
+cd $CSCOPEDIR
+cscope -b -q -k
+cp $CSCOPEDIR/cscope.in.out $PROJECT/
+cp $CSCOPEDIR/cscope.out $PROJECT/
+cp $CSCOPEDIR/cscope.po.out $PROJECT/
+echo "Copied cscope files to $PROJECT"

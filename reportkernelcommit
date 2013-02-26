@@ -1,0 +1,79 @@
+#!/bin/bash
+
+KERNEL_DIR="/home/denny/project/kernel"
+BRANCH="origin/platform/android/main"
+LOG_ROOT=~/log/reportkernelcommit
+COMMITLOG="$LOG_ROOT/commitlog.log"
+
+cd $KERNEL_DIR
+
+# Global variables set-up
+DEBUG=1
+TEST_RUN=0
+DAY_TIME_PERIOD=1
+
+#-----------------------------------------------------------------------------
+pr_dbg(){
+	if [ "$DEBUG" == "1" ]; then
+		echo $1
+	fi
+}
+
+# kernel update
+update_kernel(){
+	git remote update
+}
+
+generate_log(){
+	mkdir -p $LOG_ROOT
+
+	git log --since={02-01-2013} | tee $COMMITLOG
+	#git log --since="yesterday" | tee $COMMITLOG
+}
+
+send_report(){
+	mutt -s "Daily Kernel commit report on $BRANCH" $1 < $COMMITLOG
+}
+
+# Start main function
+#
+if [ "$DAY_TIME_PERIOD" == "1" ]; then
+	TIME_OPERATOR="%j"  # day
+	pr_dbg "Loop period: Day"
+else
+	TIME_OPERATOR="%M"  # Second for test
+	pr_dbg "Loop period: Second"
+fi
+CURRENT=`date "+$TIME_OPERATOR"`
+
+RUN_SCRIPT=0
+while [ 1 ]; do
+	if [ "$CURRENT" != `date "+$TIME_OPERATOR"` ]; then
+		pr_dbg "Time expired"
+		pr_dbg "CURRENT: $CURRENT"
+		CURRENT=`date "+$TIME_OPERATOR"`
+		pr_dbg "NEXT: $CURRENT"
+		RUN_SCRIPT=1
+	fi
+
+	if [ "$TEST_RUN" == "1" ]; then
+		pr_dbg "Triggered test"
+		RUN_SCRIPT=1
+	fi
+
+	if [ "$RUN_SCRIPT" == "1" ]; then
+		pr_dbg "Running script..."
+
+		update_kernel
+		generate_log
+		send_report denny.ds.yang@gmail.com 
+
+		pr_dbg "Finished script..."
+	fi
+	RUN_SCRIPT=0
+	if [ "$TEST_RUN" == "1" ]; then
+		exit
+	fi
+done
+exit
+
