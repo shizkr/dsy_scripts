@@ -1,0 +1,91 @@
+#!/bin/bash
+
+# Usage: connect_gdb $1 $2
+#    $1: symbol exe name
+#    $2: exe name for PID on device side
+# when you run the script, if exe file is not in running on the device
+# you have to execute with gdbserver and run the script without
+# $2 as it's already attached through gdbserver in the device.
+
+hw=hw
+
+adb=$(which adb)
+if [[ "$adb" = "" ]] ; then
+  echo "Install adb in your path"
+  exit -1
+fi
+
+root=$(`echo pwd`)
+if [ ! -d "$root/.repo" ]; then
+  echo "Please run the script on top of your repo"
+  exit -1
+fi
+
+PORT=:5039
+symbol_exe=$1
+prog_name=$2
+gdb_server_on_device=/system/bin/gdbserver
+out_symbols=$root/out/target/product/$hw/symbols
+out_so_symbols=$out_symbols/system/lib
+out_exe_symbols=$out_symbols/system/bin
+
+if [ ! -d "$out_exe_symbols" ]; then
+  echo "Please build repo and make sure you are debugging right executable file!"
+  exit -1
+fi
+
+# current gdbserver
+pid=$(adb shell ps | awk '/gdbserver/ {print $2}')
+if [[ "$pid" != "" ]] ; then
+    #echo "adb shell kill $pid"
+	echo ""
+fi
+
+pid=$(adb shell ps | awk "/$prog_name/ {print \$2}")
+if [[ "$pid" == "" ]] ; then
+ echo ""
+ echo "If you haven't done so already, do this first on the device:"
+ echo "    gdbserver ${PORT} /system/bin/$prog_name"
+ echo " or"
+ echo "    gdbserver ${PORT} --attach PID#"
+ echo ""
+ exit 2
+fi
+
+no_gdb_server=$(adb shell ls $gdb_server_on_device | grep 'No such file')
+if [[ "$no_gdb_server" != "" ]] ; then
+  echo "No gdb server on device at $gdb_server_on_device"
+  echo "Please install a debug build."
+  exit 3
+fi
+
+if [[ "$2" != "" ]]; then
+	adb shell $gdb_server_on_device :5039 --attach $pid &
+	sleep 2
+fi
+adb forward tcp:5039 tcp:5039
+
+# gdb commands
+cmdfile=$(mktemp /tmp/gdbclient_cmds_XXXXXXXXX)
+cat >$cmdfile<<EOF
+set solib-absolute-prefix ${out_symbols}
+set solib-search-path ${out_so_symbols}:${out_so_symbols}/hw:${out_so_symbols}/ssl/engines:${out_so_symbols}/drm:${out_so_symbols}/egl:${out_so_symbols}/soundfx
+target remote :5039
+EOF
+
+gdb=$(echo $ANDROID_TOOLCHAIN/*gdb)
+if [[ ! -f ${gdb} ]] ; then
+  echo "No gdb in ANDROID_TOOLCHAIN which is $ANDROID_TOOLCHAIN"
+  exit 4
+else
+  echo Using $gdb
+fi
+
+# gdb
+#echo "${gdb} -x $cmdfile $out_exe_symbols/$symbol_exe"
+#${gdb} -x $cmdfile $out_exe_symbols/$symbol_exe
+
+# ddd
+ddd --debugger ${gdb} -x "${cmdfile}" "${out_exe_symbols}/${symbol_exe}"
+
+#rm $cmdfile
