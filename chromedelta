@@ -1,0 +1,43 @@
+#!/bin/bash
+
+PWD=`pwd`
+
+if [ "$1" == "" ]; then
+	echo ""
+	echo "Error! please check your parameter for delta change list!"
+	echo "Ex) $0 2019-01-01 2019-01-10"
+	echo ""
+	exit
+fi
+
+output=$PWD/output_changes_$1_$2.txt
+echo "" > $output
+
+after="$1"
+before="$2"
+
+total_count=0
+
+repo list > repo.list
+while read line
+do
+	pro_dir=$(echo $line | awk '{print $1}')
+	pushd ./$pro_dir &> /dev/null
+	git_log=$(git log --after=$after --before=$before --format=%h:%an:%cD:%s)
+	#git_log=$(git log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit)
+
+	if [ "$git_log" != "" ]; then
+		echo "------------------------------------------------" >> $output
+		echo $line >> $output
+		echo "------------------------------------------------" >> $output
+		printf "$git_log\n" >> $output
+		cnt=$(printf "$git_log\n" | grep "" -c)
+		total_count=`expr $cnt + $total_count`
+	fi
+	popd &> /dev/null
+done < repo.list
+
+echo "================================================" >> $output
+echo "Total patches: $total_count" >> $output
+echo "================================================" >> $output
+cat $output

@@ -1,0 +1,63 @@
+#Getting source
+repo init -u https://chromium.googlesource.com/chromiumos/manifest.git --repo-url https://chromium.googlesource.com/external/repo.git
+
+#Build Note: Inside the chroot
+export BOARD=sarien
+export LOCALES="en" USE="-cros-debug -cheets tty_console_ttyS0 pcserial"
+setup_board --board=${BOARD}
+./build_packages --board=${BOARD} --nowithautotest --accept_licenses "Google-TOS"
+./build_image --board=sarien --enable_serial=ttyS1,115200n8 --noenable_rootfs_verification test
+
+#Create a boot image
+cros flash usb:// ${BOARD}/latest
+
+#flashing downloaded image to USB
+cros flash usb:// chromiumos_test_image.bin
+
+#Installing from USB stick to eMMC
+chromeos-Install
+#Ctrl+U during boot-up
+
+#Starting Servo and controlling it (https://www.chromium.org/chromium-os/servo)
+cros_sdk --enter --no-ns-pid
+sudo servod -b sarien&
+dut-control cpu_uart_pty
+#Note: This will output the port like this.
+cpu_uart_pty:/dev/pts/25
+
+#Connect to the servo in new terminal
+#Note: Need to use the minicom.  (Terminal to communicate with the board) https://help.ubuntu.com/community/Minicom
+#Install minicom: sudo apt-get install minicom
+sudo minicom –D /dev/pts/25 -> Use the output of cpu_uart_pty
+
+#Other servo commands
+sudo pkill servod -> kill servod
+dut-control ec_uart_pty
+dut-control power_state:reset
+
+#In the minicom terminal.
+Enable USB boot: sudo crossystem dev_boot_usb=1
+Reboot the board and boot from the USB: reboot and press control U repeatedly.
+Login: root and test0000
+Check whether you booted from the USB: df -> /dev/sda1 should be shown
+/usr/sbin/chromeos-install
+Note: This takes time.
+
+#Getting SW info
+Release: cat /etc/lsb-release
+           Corebot: crossystem |grep fw
+           EC: ectool version
+
+# flash fw - step 1. enable servo
+cros_sdk --no-ns-pid  # Ensure that you started entered the SDK with this flag
+#sudo emerge hdctools  # only necessary the first time
+sudo servod -b sarien
+
+# coreboot flash using servo V2
+dut-control spi2_vref:pp3300 spi2_buf_en:on spi2_buf_on_flex_en:on
+sudo flashrom -p ft2232_spi:type=servo-v2 -w <image>
+dut-control spi2_vref:off spi2_buf_en:on spi2_buf_on_flex_en:off
+
+# FW flashing in device.
+sudo flashrom -p host --fast-verify -w image.bin
+
